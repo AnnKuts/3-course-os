@@ -1,0 +1,20 @@
+{
+  "name": "page-replacement-simulation",
+  "version": "1.0.0",
+  "description": "OS Lab 3 — Page Replacement Algorithms: Random + WSClock",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsc && node dist/main.js",
+    "sim": "tsc && node dist/main.js",
+    "experiment": "tsc && node dist/experiment.js",
+    "test": "tsc && node --test dist/__tests__/*.test.js",
+    "clean": "rm -rf dist"
+  },
+  "keywords": ["os", "virtual-memory", "page-replacement", "wsclock", "simulation"],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "@types/node": "^20.10.0"
+  }
+}
