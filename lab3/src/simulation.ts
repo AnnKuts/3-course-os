@@ -40,6 +40,18 @@ export interface WorkloadTrace {
 
 /**
  * Simulation orchestrator.
+ *
+ * ## Round-Robin Scheduling Behaviour
+ *
+ * Processes are scheduled round-robin with a configurable time quantum.
+ * The current process runs for up to `timeQuantum` accesses before yielding.
+ * When the current process finishes (lifetime exhausted) mid-quantum the
+ * quantum is reset and the scheduler moves to the next runnable process.
+ * Newly arrived processes are admitted at the start of each scheduling
+ * iteration (before the current quantum is consumed), so a process that
+ * arrives at time T will be eligible for the *next* quantum after T.
+ *
+ * Both behaviours are tested in the regression suite.
  */
 export class Simulation {
   private readonly config: SimulationConfig;
@@ -74,7 +86,7 @@ export class Simulation {
     const readyQueue: Process[] = [];
 
     let currentTime = 0;
-    let currentProcessIndex = 0;
+    let currentProcess: Process | null = null;
     let currentQuantumRemaining = 0;
 
     while (currentTime < this.config.totalAccesses) {
@@ -84,7 +96,9 @@ export class Simulation {
         sortedConfigs[nextArrivalIdx].cfg.creationTime <= currentTime
       ) {
         // Enforce max concurrent processes
-        const activeCount = readyQueue.filter((p) => !p.terminated).length;
+        const activeCount =
+          (currentProcess && !currentProcess.terminated ? 1 : 0) +
+          readyQueue.filter((p) => !p.terminated).length;
         if (activeCount < this.config.maxConcurrentProcesses) {
           const item = sortedConfigs[nextArrivalIdx];
           const pid = nextPid++;
@@ -109,27 +123,37 @@ export class Simulation {
         }
       }
 
-      // Filter out terminated processes
-      const activeProcesses = readyQueue.filter((p) => !p.terminated);
-
-      if (activeProcesses.length === 0) {
-        if (nextArrivalIdx < sortedConfigs.length) {
-          // Fast-forward to next arrival time
-          currentTime = sortedConfigs[nextArrivalIdx].cfg.creationTime;
-          continue;
+      // 2. Quantum check and context switching
+      if (currentProcess !== null) {
+        if (currentQuantumRemaining <= 0) {
+          if (readyQueue.length > 0) {
+            // Quantum exhausted; switch to next ready process
+            readyQueue.push(currentProcess);
+            currentProcess = readyQueue.shift()!;
+            currentQuantumRemaining = this.config.timeQuantum;
+          } else {
+            // No other process ready; renew quantum for current process
+            currentQuantumRemaining = this.config.timeQuantum;
+          }
+        }
+      } else {
+        if (readyQueue.length > 0) {
+          currentProcess = readyQueue.shift()!;
+          currentQuantumRemaining = this.config.timeQuantum;
         } else {
-          // No more processes left
-          break;
+          if (nextArrivalIdx < sortedConfigs.length) {
+            // Fast-forward to next arrival time
+            currentTime = Math.min(
+              sortedConfigs[nextArrivalIdx].cfg.creationTime,
+              this.config.totalAccesses
+            );
+            continue;
+          } else {
+            // No more processes left
+            break;
+          }
         }
       }
-
-      // 2. Schedule next process (Round-Robin)
-      if (currentQuantumRemaining <= 0 || currentProcessIndex >= activeProcesses.length) {
-        currentProcessIndex = currentProcessIndex % activeProcesses.length;
-        currentQuantumRemaining = this.config.timeQuantum;
-      }
-
-      const currentProcess = activeProcesses[currentProcessIndex];
 
       // 3. Generate memory access for current process
       currentProcess.checkWorkingSetChange();
@@ -150,10 +174,8 @@ export class Simulation {
       if (currentProcess.isFinished()) {
         currentProcess.terminated = true;
         terminationTimes.set(currentProcess.pid, currentTime);
+        currentProcess = null;
         currentQuantumRemaining = 0;
-        currentProcessIndex = currentProcessIndex % Math.max(1, activeProcesses.length - 1);
-      } else if (currentQuantumRemaining <= 0) {
-        currentProcessIndex = (currentProcessIndex + 1) % activeProcesses.length;
       }
     }
 
@@ -181,11 +203,14 @@ export class Simulation {
       strategy = new WSClockReplacement(this.config.tau);
     }
 
+    const debugMode = this.config.debugMode ?? false;
+
     const kernel = new Kernel(
       this.config.numPhysicalFrames,
       strategy,
       this.logger,
-      mmu
+      mmu,
+      debugMode
     );
 
     // Instantiate process state for this run
@@ -247,6 +272,7 @@ export class Simulation {
       const termTime = workload.terminationTimes.get(access.pid);
       if (termTime !== undefined && access.time + 1 >= termTime && !terminatedPids.has(access.pid)) {
         terminatedPids.add(access.pid);
+        this.logger.event(`[t=${access.time + 1}] Process PID=${proc.pid} terminated`);
         kernel.terminateProcess(proc);
       }
     }
@@ -259,8 +285,9 @@ export class Simulation {
       }
     }
 
-    // Validate system invariants
-    const invariantErrors = kernel.validateInvariants();
+    // ── Final invariant check (bidirectional, with process list) ──────────
+    const activeProcList = Array.from(processMap.values());
+    const invariantErrors = kernel.validateInvariants(activeProcList);
     if (invariantErrors.length > 0) {
       this.logger.warn('Simulation finished with invariant violations:');
       for (const err of invariantErrors) {
@@ -276,6 +303,7 @@ export class Simulation {
       totalEvictions: kernel.totalEvictions,
       dirtyWriteBacks: kernel.dirtyWriteBacks,
       firstTimeLoads: kernel.firstTimeLoads,
+      cleanReloads: kernel.cleanReloads,
       backingStoreReloads: kernel.backingStoreReloads,
       perProcessStats: processStatsMap,
     };
@@ -301,11 +329,15 @@ export class Simulation {
 
 /**
  * Formatted printer for single simulation run.
+ * Includes the three-way load classification and checks their sum == totalPageFaults.
  */
 export function printStats(stats: SimulationStats): void {
   const faultRate = stats.totalAccesses > 0
     ? ((stats.totalPageFaults / stats.totalAccesses) * 100).toFixed(2)
     : '0.00';
+
+  const loadSum = stats.firstTimeLoads + stats.cleanReloads + stats.backingStoreReloads;
+  const loadSumOk = loadSum === stats.totalPageFaults;
 
   console.log(`\n============================================================`);
   console.log(`Algorithm:                ${stats.algorithmName}`);
@@ -316,8 +348,12 @@ export function printStats(stats: SimulationStats): void {
   console.log(`Page Fault Rate:          ${faultRate}%`);
   console.log(`Total Evictions:          ${stats.totalEvictions}`);
   console.log(`Dirty Page Write-backs:   ${stats.dirtyWriteBacks}`);
-  console.log(`First-time Page Loads:    ${stats.firstTimeLoads}`);
-  console.log(`Backing Store Reloads:    ${stats.backingStoreReloads}`);
+  console.log(`------------------------------------------------------------`);
+  console.log(`Page Load Breakdown (sum should equal total faults):`);
+  console.log(`  First-time loads:       ${stats.firstTimeLoads}`);
+  console.log(`  Clean reloads:          ${stats.cleanReloads}`);
+  console.log(`  Backing-store reloads:  ${stats.backingStoreReloads}`);
+  console.log(`  Sum:                    ${loadSum} ${loadSumOk ? '✓' : '✗ MISMATCH'}`);
   console.log(`------------------------------------------------------------`);
   console.log(`Per-Process Breakdown:`);
   for (const [pid, ps] of stats.perProcessStats) {
@@ -333,6 +369,7 @@ export function printStats(stats: SimulationStats): void {
 
 /**
  * Formatted printer for comparative experiment tables.
+ * Conclusions are derived from actual measured results.
  */
 export function printComparisonTable(
   results: Array<{
@@ -351,9 +388,15 @@ export function printComparisonTable(
     '| Random Rate'.padEnd(14) +
     '| WSClock Faults'.padEnd(17) +
     '| WSClock Rate'.padEnd(15) +
-    '| Improvement'
+    '| Result'
   );
   console.log('-'.repeat(88));
+
+  let wsclockWins = 0;
+  let randomWins = 0;
+  let ties = 0;
+  let prevRandomFaults: number | null = null;
+  let monotonic = true;
 
   for (const r of results) {
     const rFaults = r.random.totalPageFaults;
@@ -362,7 +405,24 @@ export function printComparisonTable(
     const rRate = total > 0 ? (rFaults / total * 100).toFixed(2) + '%' : '0.00%';
     const wRate = total > 0 ? (wFaults / total * 100).toFixed(2) + '%' : '0.00%';
     const diff = rFaults - wFaults;
-    const improvement = rFaults > 0 ? ((diff / rFaults) * 100).toFixed(1) + '%' : '0.0%';
+
+    // Track monotonicity of Random faults as WS grows
+    if (prevRandomFaults !== null && rFaults < prevRandomFaults) {
+      monotonic = false;
+    }
+    prevRandomFaults = rFaults;
+
+    let result: string;
+    if (diff > 0) {
+      wsclockWins++;
+      result = `WSClock -${((diff / rFaults) * 100).toFixed(1)}%`;
+    } else if (diff < 0) {
+      randomWins++;
+      result = `Random -${((-diff / wFaults) * 100).toFixed(1)}%`;
+    } else {
+      ties++;
+      result = 'Tie';
+    }
 
     console.log(
       String(r.workingSetSize).padEnd(10) +
@@ -371,8 +431,52 @@ export function printComparisonTable(
       `| ${rRate.padEnd(12)}` +
       `| ${String(wFaults).padEnd(15)}` +
       `| ${wRate.padEnd(13)}` +
-      `| ${diff >= 0 ? '-' + improvement : '+' + improvement}`
+      `| ${result}`
     );
   }
   console.log(`========================================================================================\n`);
+
+  // ── Data-driven conclusions ──────────────────────────────────────────────
+  const total = results.length;
+  console.log(`Measured Conclusions:`);
+
+  console.log(
+    `1. Fault rate trend with WS size: ` +
+    (monotonic
+      ? 'Monotonically increasing for Random — higher WS creates more contention.'
+      : 'Non-monotonic — page fault rate may decrease at some working-set sizes due to ' +
+        'interaction between WS shifts, quantum boundaries, and frame pool size.')
+  );
+
+  if (wsclockWins > randomWins) {
+    console.log(
+      `2. Algorithm winner: WSClock won in ${wsclockWins}/${total} cases, ` +
+      `Random won in ${randomWins}/${total}, ties ${ties}/${total}.`
+    );
+    console.log(
+      `   WSClock's locality-awareness (R bit + TAU window) reduces page faults ` +
+      `when working-set size is small relative to physical memory.`
+    );
+  } else if (randomWins > wsclockWins) {
+    console.log(
+      `2. Algorithm winner: Random won in ${randomWins}/${total} cases, ` +
+      `WSClock won in ${wsclockWins}/${total}, ties ${ties}/${total}.`
+    );
+    console.log(
+      `   WSClock performs worse when the working set is larger than physical memory: ` +
+      `protecting recently-referenced hot pages delays eviction of old pages and ` +
+      `increases reload overhead. Consider reducing TAU.`
+    );
+  } else {
+    console.log(
+      `2. Algorithms were evenly matched: WSClock won ${wsclockWins}, ` +
+      `Random won ${randomWins}, ties ${ties} (total ${total} experiments).`
+    );
+  }
+
+  console.log(
+    `3. Workload integrity: both algorithms evaluated against the identical ` +
+    `pre-generated memory access trace (same process arrivals, lifetimes, ` +
+    `virtual pages, read/write types, and working-set shifts).`
+  );
 }

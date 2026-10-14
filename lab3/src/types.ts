@@ -47,6 +47,11 @@ export interface SimulationConfig {
   writeProbability: number;
   /** Locality probability (e.g. 0.9 for 90% accesses to working set) */
   workingSetLocality: number;
+  /**
+   * Debug mode: validate memory invariants after every page fault.
+   * Increases runtime but catches corruption immediately.
+   */
+  debugMode?: boolean;
 }
 
 export interface ProcessStats {
@@ -63,7 +68,19 @@ export interface SimulationStats {
   totalPageFaults: number;
   totalEvictions: number;
   dirtyWriteBacks: number;
+  /**
+   * Pages loaded for the first time ever (never previously in memory).
+   */
   firstTimeLoads: number;
+  /**
+   * Pages reloaded into memory after being evicted clean (no backing-store
+   * write was performed, but the page had been mapped previously).
+   */
+  cleanReloads: number;
+  /**
+   * Pages reloaded from the simulated backing store (previously saved there
+   * because they were evicted dirty).
+   */
   backingStoreReloads: number;
   perProcessStats: Map<number, ProcessStats>;
 }

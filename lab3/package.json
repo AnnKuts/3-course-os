@@ -7,6 +7,7 @@
     "build": "tsc",
     "start": "tsc && node dist/main.js",
     "sim": "tsc && node dist/main.js",
+    "demo": "tsc && node dist/demo.js",
     "experiment": "tsc && node dist/experiment.js",
     "test": "tsc && node --test dist/__tests__/*.test.js",
     "clean": "rm -rf dist"

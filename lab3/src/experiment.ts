@@ -64,22 +64,6 @@ export function runExperiments(): void {
   }
 
   printComparisonTable(results);
-
-  console.log(`Key Observations & Theoretical Analysis:`);
-  console.log(`1. Monotonic Trend with Working Set Size:`);
-  console.log(`   As the working set size increases from 4 to 24, the aggregate working set demand`);
-  console.log(`   grows (from 12 to 72 pages across 3 processes). This exceeds physical memory capacity`);
-  console.log(`   (40 frames), causing page fault rates to strictly increase for both algorithms.`);
-  console.log(`2. WSClock Locality Retention vs Random Eviction:`);
-  console.log(`   WSClock leverages hardware reference bits (R) and PhysicalPage lastAccessTime descriptors`);
-  console.log(`   within the configured TAU window (TAU=180). Active pages in the current working set`);
-  console.log(`   are preserved, while inactive pages are prioritized for eviction.`);
-  console.log(`3. Random Inefficiency:`);
-  console.log(`   Random page replacement selects victim frames without any consideration of usage recency`);
-  console.log(`   or locality, frequently evicting hot pages and causing subsequent page faults.`);
-  console.log(`4. Replayable Workload Integrity:`);
-  console.log(`   Both algorithms are evaluated against identical pre-generated trace sequences`);
-  console.log(`   with identical process lifecycles, memory accesses, and write operations.`);
 }
 
 if (require.main === module) {
