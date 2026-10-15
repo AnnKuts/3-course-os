@@ -116,6 +116,39 @@ describe('3. WSClock Algorithm', () => {
     const victim = wsclock.selectVictim(frames, 100, false);
     assert.equal(victim.frameId, 1);
   });
+
+  test('When all pages have R=1, clears R bits, evicts frame at clockHand and advances hand', () => {
+    const wsclock = new WSClockReplacement(50);
+    wsclock.setClockHand(1);
+
+    const f0 = new PhysicalPage(0);
+    const p0 = new PTE();
+    p0.P = true; p0.R = true; p0.M = false; p0.PPN = 0;
+    f0.allocate(p0, 1, 0, 20);
+
+    const f1 = new PhysicalPage(1);
+    const p1 = new PTE();
+    p1.P = true; p1.R = true; p1.M = false; p1.PPN = 1;
+    f1.allocate(p1, 1, 1, 20);
+
+    const f2 = new PhysicalPage(2);
+    const p2 = new PTE();
+    p2.P = true; p2.R = true; p2.M = false; p2.PPN = 2;
+    f2.allocate(p2, 1, 2, 20);
+
+    const frames = [f0, f1, f2];
+    const victim = wsclock.selectVictim(frames, 100, false);
+
+    assert.equal(p0.R, false);
+    assert.equal(p1.R, false);
+    assert.equal(p2.R, false);
+    assert.equal(f0.lastAccessTime, 100);
+    assert.equal(f1.lastAccessTime, 100);
+    assert.equal(f2.lastAccessTime, 100);
+
+    assert.equal(victim.frameId, 1);
+    assert.equal(wsclock.getClockHand(), 2);
+  });
 });
 
 describe('4. Kernel', () => {

@@ -118,8 +118,20 @@ export class WSClockReplacement implements ReplacementStrategy {
       return firstUnreferenced;
     }
 
-    const fallback = frames.find((f) => f.busy)!;
-    this.clockHand = (frames.indexOf(fallback) + 1) % n;
-    return fallback;
+    for (let i = 0; i < n; i++) {
+      const idx = (start + i) % n;
+      const frame = frames[idx];
+      if (frame.busy) {
+        if (verbose) {
+          console.log(
+            `  [DEBUG] WSClock fallback: evict frame ${frame.frameId} starting at clockHand=${start}`
+          );
+        }
+        this.clockHand = (idx + 1) % n;
+        return frame;
+      }
+    }
+
+    throw new Error('WSClock: no busy frames');
   }
 }
