@@ -1,7 +1,3 @@
-// ---------------------------------------------------------------------------
-// Запис у таблиці сторінок (Page Table Entry)
-// Поля: P (Present), R (Referenced), M (Modified/Dirty), PPN (physical page #)
-// ---------------------------------------------------------------------------
 export class PTE {
   public P: boolean = false;
   public R: boolean = false;
@@ -16,9 +12,6 @@ export class PTE {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Таблиця сторінок процесу
-// ---------------------------------------------------------------------------
 export class PageTable {
   public readonly entries: PTE[];
   public readonly size: number;
@@ -38,10 +31,6 @@ export class PageTable {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Дескриптор фізичного фрейму оперативної пам'яті
-// Зберігає lastAccessTime для WSClock (не в PTE — це апаратне поле)
-// ---------------------------------------------------------------------------
 export class PhysicalPage {
   public readonly frameId: number;
   public busy: boolean = false;

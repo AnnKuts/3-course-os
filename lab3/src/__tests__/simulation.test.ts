@@ -8,9 +8,6 @@ import { RandomReplacement, WSClockReplacement } from '../algorithms';
 import { getDefaultConfig } from '../main';
 import { Simulation } from '../simulation';
 
-// ---------------------------------------------------------------------------
-// 1. Структури даних: PTE, PageTable, PhysicalPage
-// ---------------------------------------------------------------------------
 describe('1. Data Structures', () => {
   test('PTE contains exactly P, R, M, PPN fields', () => {
     const pte = new PTE();
@@ -40,9 +37,6 @@ describe('1. Data Structures', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 2. MMU — вбудована в Kernel.handleAccess
-// ---------------------------------------------------------------------------
 describe('2. MMU Behaviour (via Kernel)', () => {
   test('READ sets R=1, does not set M', () => {
     const kernel = new Kernel(2, new RandomReplacement(new SeededRNG(42)));
@@ -68,17 +62,12 @@ describe('2. MMU Behaviour (via Kernel)', () => {
     const proc = new Process(1, { creationTime: 0, lifetime: 10, virtualPages: 4, workingSetSize: 2, workingSetChangeInterval: 10 }, new SeededRNG(1));
     kernel.handleAccess(proc, 0, AccessType.READ, 50);
     const frame = kernel.getFrames().find((f) => f.busy)!;
-    // Завантаження при промаху встановлює lastAccessTime у PhysicalPage
     assert.equal(frame.lastAccessTime, 50);
-    // Звичайне звернення (не промах) НЕ змінює lastAccessTime
     kernel.handleAccess(proc, 0, AccessType.READ, 99);
     assert.equal(frame.lastAccessTime, 50);
   });
 });
 
-// ---------------------------------------------------------------------------
-// 3. WSClock
-// ---------------------------------------------------------------------------
 describe('3. WSClock Algorithm', () => {
   test('Clears R=1 and updates lastAccessTime when sweeping referenced frame', () => {
     const wsclock = new WSClockReplacement(50);
@@ -93,9 +82,9 @@ describe('3. WSClock Algorithm', () => {
     frame1.allocate(pte1, 1, 1, 10);
 
     const victim = wsclock.selectVictim([frame0, frame1], 100, false);
-    assert.equal(pte0.R, false);        // R скинуто
-    assert.equal(frame0.lastAccessTime, 100); // час оновлено
-    assert.equal(victim.frameId, 1);    // вибрано незвернений фрейм
+    assert.equal(pte0.R, false);
+    assert.equal(frame0.lastAccessTime, 100);
+    assert.equal(victim.frameId, 1);
   });
 
   test('Prefers clean page (M=0) over dirty page (M=1) when both outside WS', () => {
@@ -103,15 +92,15 @@ describe('3. WSClock Algorithm', () => {
     const frame0 = new PhysicalPage(0);
     const pte0 = new PTE();
     pte0.P = true; pte0.R = false; pte0.M = true; pte0.PPN = 0;
-    frame0.allocate(pte0, 1, 0, 20); // age=80 > TAU=40, dirty
+    frame0.allocate(pte0, 1, 0, 20);
 
     const frame1 = new PhysicalPage(1);
     const pte1 = new PTE();
     pte1.P = true; pte1.R = false; pte1.M = false; pte1.PPN = 1;
-    frame1.allocate(pte1, 1, 1, 30); // age=70 > TAU=40, clean
+    frame1.allocate(pte1, 1, 1, 30);
 
     const victim = wsclock.selectVictim([frame0, frame1], 100, false);
-    assert.equal(victim.frameId, 1); // чистий
+    assert.equal(victim.frameId, 1);
   });
 
   test('Falls back to oldest dirty when no clean pages outside WS exist', () => {
@@ -123,16 +112,12 @@ describe('3. WSClock Algorithm', () => {
       f.allocate(p, 1, id, lastAccess);
       return f;
     };
-    const frames = [mkFrame(0, 50), mkFrame(1, 30)]; // at t=100: ages 50 and 70
+    const frames = [mkFrame(0, 50), mkFrame(1, 30)];
     const victim = wsclock.selectVictim(frames, 100, false);
-    // Найстаріший — frame1 (age=70)
     assert.equal(victim.frameId, 1);
   });
 });
 
-// ---------------------------------------------------------------------------
-// 4. Kernel: розподіл пам'яті, статистика, інваріанти
-// ---------------------------------------------------------------------------
 describe('4. Kernel', () => {
   test('Page fault allocates frame and sets PTE.P=true, lastAccessTime', () => {
     const kernel = new Kernel(2, new RandomReplacement(new SeededRNG(42)));
@@ -200,17 +185,13 @@ describe('4. Kernel', () => {
     const pte0 = proc.pageTable.getPTE(0);
     const pte1 = proc.pageTable.getPTE(1);
     pte1.P = true;
-    pte1.PPN = pte0.PPN; // штучно примушуємо конфлікт
+    pte1.PPN = pte0.PPN;
     const errors = kernel.validateInvariants([proc]);
     assert.ok(errors.length > 0, 'Must detect shared frame reference');
-    // Відновлення
     pte1.P = false; pte1.PPN = -1;
   });
 });
 
-// ---------------------------------------------------------------------------
-// 5. Round-Robin планування
-// ---------------------------------------------------------------------------
 describe('5. Round-Robin Scheduling', () => {
   test('All configured processes appear in workload trace', () => {
     const cfg = getDefaultConfig();
@@ -233,9 +214,6 @@ describe('5. Round-Robin Scheduling', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 6. Відтворюваність симуляції
-// ---------------------------------------------------------------------------
 describe('6. Reproducibility', () => {
   test('Same seed produces identical workload traces', () => {
     const cfg = getDefaultConfig();

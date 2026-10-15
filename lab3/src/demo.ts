@@ -1,7 +1,6 @@
 import { SimulationConfig } from './simulation';
 import { Simulation, printStats } from './simulation';
 
-// Детальна демонстрація з verbose-виводом на малому прикладі
 const cfg: SimulationConfig = {
   numPhysicalFrames: 6,
   maxConcurrentProcesses: 2,

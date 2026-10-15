@@ -28,7 +28,6 @@ export interface SimulationStats {
   perProcessStats: Map<number, ProcessStats>;
 }
 
-// Запис трасування для відтворюваності
 interface TraceAccess {
   time: number;
   pid: number;
@@ -49,7 +48,6 @@ export class Simulation {
     this.cfg = cfg;
   }
 
-  // Генерація детермінованого трасування за Round Robin
   generateWorkload(): WorkloadTrace {
     const rng = new SeededRNG(this.cfg.seed);
     const sortedCfgs = [...this.cfg.processes]
@@ -69,7 +67,6 @@ export class Simulation {
     let t = 0;
 
     while (t < this.cfg.totalAccesses) {
-      // Запуск нових процесів
       while (
         nextArrivalIdx < sortedCfgs.length &&
         sortedCfgs[nextArrivalIdx].c.creationTime <= t
@@ -94,7 +91,6 @@ export class Simulation {
         nextArrivalIdx++;
       }
 
-      // Round-Robin планування
       if (currentProcess !== null) {
         if (quantum <= 0) {
           if (readyQueue.length > 0) {
@@ -133,7 +129,6 @@ export class Simulation {
     return { processConfigs, accesses, terminationTimes };
   }
 
-  // Виконання симуляції на готовому трасуванні
   runWithWorkload(algorithm: 'random' | 'wsclock', workload: WorkloadTrace): SimulationStats {
     const strategy =
       algorithm === 'random'
@@ -171,7 +166,6 @@ export class Simulation {
       ps.totalAccesses++;
       if (fault) ps.pageFaults++;
 
-      // Завершення процесу
       const termTime = workload.terminationTimes.get(acc.pid);
       if (termTime !== undefined && acc.time + 1 >= termTime && !terminated.has(acc.pid)) {
         terminated.add(acc.pid);
@@ -179,7 +173,6 @@ export class Simulation {
       }
     }
 
-    // Завершення процесів, що досягли ліміту, але не отримали термінаційного звернення
     for (const [pid, proc] of processMap) {
       if (started.has(pid) && !terminated.has(pid)) {
         terminated.add(pid);
@@ -187,7 +180,6 @@ export class Simulation {
       }
     }
 
-    // Фінальна перевірка узгодженості
     const errs = kernel.validateInvariants(Array.from(processMap.values()));
     if (errs.length > 0) {
       console.warn('[WARN] Invariant violations at end of simulation:');
@@ -219,9 +211,6 @@ export class Simulation {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Виведення статистики
-// ---------------------------------------------------------------------------
 export function printStats(stats: SimulationStats): void {
   const rate = stats.totalAccesses > 0
     ? ((stats.totalPageFaults / stats.totalAccesses) * 100).toFixed(2)

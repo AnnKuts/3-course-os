@@ -24,9 +24,6 @@ export interface ProcessStats {
   pagesAllocated: number;
 }
 
-// ---------------------------------------------------------------------------
-// Робочий набір — моделює локальність звернень
-// ---------------------------------------------------------------------------
 class WorkingSet {
   private currentPages: number[] = [];
   private accessesSinceChange: number = 0;
@@ -75,9 +72,6 @@ class WorkingSet {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Процес — керує таблицею сторінок, робочим набором та статистикою
-// ---------------------------------------------------------------------------
 export class Process {
   public readonly pid: number;
   public readonly virtualPages: number;

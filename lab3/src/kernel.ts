@@ -2,11 +2,6 @@ import { PhysicalPage, PTE, PageTable } from './memory';
 import { ReplacementStrategy } from './algorithms';
 import { Process, AccessType } from './process';
 
-// ---------------------------------------------------------------------------
-// MMU — апаратна трансляція адрес
-// Встановлює R при будь-якому зверненні, M — при записі
-// Не оновлює lastAccessTime (це робиться програмно при сторінковому промаху)
-// ---------------------------------------------------------------------------
 function mmuAccess(
   pageTable: PageTable,
   virtualPage: number,
@@ -19,17 +14,13 @@ function mmuAccess(
   return { pageFault: false, pte, ppn: pte.PPN };
 }
 
-// ---------------------------------------------------------------------------
-// Ядро ОС — управляє фізичною пам'яттю та обробляє сторінкові промахи
-// ---------------------------------------------------------------------------
 export class Kernel {
   private readonly frames: PhysicalPage[];
-  private readonly backingStore = new Set<string>();  // "pid:vp"
-  private readonly everLoaded = new Set<string>();    // "pid-vp"
+  private readonly backingStore = new Set<string>();
+  private readonly everLoaded = new Set<string>();
   private strategy: ReplacementStrategy;
   private readonly verbose: boolean;
 
-  // Статистика
   public totalPageFaults = 0;
   public totalEvictions = 0;
   public dirtyWriteBacks = 0;
@@ -49,28 +40,23 @@ export class Kernel {
 
   getFrames(): PhysicalPage[] { return this.frames; }
 
-  // Публічний доступ до BackingStore для тестів
   hasSavedPage(pid: number, vp: number): boolean {
     return this.backingStore.has(`${pid}:${vp}`);
   }
 
-  // Обробка звернення до пам'яті; повертає true якщо стався сторінковий промах
   handleAccess(proc: Process, virtualPage: number, type: AccessType, time: number): boolean {
     let result = mmuAccess(proc.pageTable, virtualPage, type);
     if (!result.pageFault) return false;
 
-    // Сторінковий промах
     this.totalPageFaults++;
     proc.recordPageFault();
     if (this.verbose) {
       console.log(`[EVENT] Page fault: PID=${proc.pid}, VP=${virtualPage}, t=${time}`);
     }
 
-    // Знайти вільний або виселити
     const frame = this.findFreeFrame() ?? this.evict(time);
     this.load(proc, virtualPage, frame, time);
 
-    // Повторна трансляція — тепер має успішно
     result = mmuAccess(proc.pageTable, virtualPage, type);
     if (result.pageFault) {
       throw new Error(`Page fault retry failed: PID=${proc.pid}, VP=${virtualPage}`);
@@ -130,7 +116,6 @@ export class Kernel {
         this.strategy.onFrameFreed?.(frame.frameId);
       }
     }
-    // Очищення записів процесу з допоміжних структур
     const bsPrefix = `${proc.pid}:`;
     for (const k of this.backingStore) {
       if (k.startsWith(bsPrefix)) this.backingStore.delete(k);
@@ -145,7 +130,6 @@ export class Kernel {
     }
   }
 
-  // Перевірка узгодженості стану пам'яті (для тестів та debugMode)
   validateInvariants(processes: Process[] = []): string[] {
     const errors: string[] = [];
     const pteToFrame = new Map<PTE, number>();
