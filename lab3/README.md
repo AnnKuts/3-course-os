@@ -17,7 +17,7 @@ src/
   demo.ts          — детальний verbose-вивід (npm run demo)
   experiment.ts    — серія дослідів (npm run experiment)
   __tests__/
-    simulation.test.ts  — 18 тестів (Node built-in test runner)
+    simulation.test.ts  — 19 тестів (Node built-in test runner)
 ```
 
 ## Команди
