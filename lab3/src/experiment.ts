@@ -1,49 +1,35 @@
-import { SimulationConfig, ProcessConfig } from './types';
-import { Simulation, printComparisonTable } from './simulation';
+import { SimulationConfig } from './simulation';
+import { Simulation } from './simulation';
 
-/**
- * Runs systematic experiments comparing Random vs WSClock across
- * varying working set sizes to observe memory pressure effects.
- */
 export function runExperiments(): void {
-  console.log(`========================================================================`);
-  console.log(`LAB 3 EXPERIMENTS: Page Replacement Under Increasing Working Set Size`);
-  console.log(`Variant 3: Random vs WSClock (Working Set Clock)`);
-  console.log(`========================================================================\n`);
+  const FRAMES = 40;
+  const WS_SIZES = [4, 8, 12, 16, 20, 24];
 
-  const numPhysicalFrames = 40;
-  const workingSetSizes = [4, 8, 12, 16, 20, 24];
-  const results = [];
+  console.log(`${'='.repeat(70)}`);
+  console.log(`OS Lab 3 — Experiment: Effect of Working Set Size on Page Faults`);
+  console.log(`Frames=${FRAMES}, Seed=42, Accesses=1500, Processes=3, TAU=180`);
+  console.log(`${'='.repeat(70)}\n`);
 
-  for (const wsSize of workingSetSizes) {
-    const processes: ProcessConfig[] = [
-      {
-        creationTime: 0,
-        lifetime: 500,
-        virtualPages: 35,
-        workingSetSize: wsSize,
-        workingSetChangeInterval: 100,
-      },
-      {
-        creationTime: 20,
-        lifetime: 500,
-        virtualPages: 35,
-        workingSetSize: wsSize,
-        workingSetChangeInterval: 100,
-      },
-      {
-        creationTime: 50,
-        lifetime: 500,
-        virtualPages: 35,
-        workingSetSize: wsSize,
-        workingSetChangeInterval: 100,
-      },
-    ];
+  const header =
+    'WS    '.padEnd(8) +
+    '| Accesses '.padEnd(12) +
+    '| Rnd Faults'.padEnd(13) +
+    '| Rnd Rate '.padEnd(12) +
+    '| WS Faults'.padEnd(12) +
+    '| WS Rate  '.padEnd(12) +
+    '| Winner';
+  console.log(header);
+  console.log('-'.repeat(83));
 
-    const config: SimulationConfig = {
-      numPhysicalFrames,
+  for (const ws of WS_SIZES) {
+    const cfg: SimulationConfig = {
+      numPhysicalFrames: FRAMES,
       maxConcurrentProcesses: 3,
-      processes,
+      processes: [
+        { creationTime: 0,  lifetime: 500, virtualPages: 35, workingSetSize: ws, workingSetChangeInterval: 100 },
+        { creationTime: 20, lifetime: 500, virtualPages: 35, workingSetSize: ws, workingSetChangeInterval: 100 },
+        { creationTime: 50, lifetime: 500, virtualPages: 35, workingSetSize: ws, workingSetChangeInterval: 100 },
+      ],
       timeQuantum: 20,
       tau: 180,
       totalAccesses: 1500,
@@ -53,17 +39,27 @@ export function runExperiments(): void {
       workingSetLocality: 0.9,
     };
 
-    const sim = new Simulation(config);
-    const { random, wsclock } = sim.runComparison();
+    const { random: r, wsclock: w } = new Simulation(cfg).runComparison();
+    const total = r.totalAccesses;
+    const rRate = ((r.totalPageFaults / total) * 100).toFixed(2) + '%';
+    const wRate = ((w.totalPageFaults / total) * 100).toFixed(2) + '%';
+    const diff = r.totalPageFaults - w.totalPageFaults;
+    const winner =
+      diff > 0 ? `WSClock -${((diff / r.totalPageFaults) * 100).toFixed(1)}%`
+      : diff < 0 ? `Random -${((-diff / w.totalPageFaults) * 100).toFixed(1)}%`
+      : 'Tie';
 
-    results.push({
-      workingSetSize: wsSize,
-      random,
-      wsclock,
-    });
+    console.log(
+      String(ws).padEnd(8) +
+      `| ${String(total).padEnd(10)}` +
+      `| ${String(r.totalPageFaults).padEnd(11)}` +
+      `| ${rRate.padEnd(10)}` +
+      `| ${String(w.totalPageFaults).padEnd(10)}` +
+      `| ${wRate.padEnd(10)}` +
+      `| ${winner}`
+    );
   }
-
-  printComparisonTable(results);
+  console.log(`${'='.repeat(70)}\n`);
 }
 
 if (require.main === module) {

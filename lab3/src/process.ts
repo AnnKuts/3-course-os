@@ -1,23 +1,94 @@
-import { PageTable } from './pageTable';
-import { WorkingSet } from './workingSet';
+import { PageTable } from './memory';
 import { SeededRNG } from './rng';
-import { ProcessConfig, ProcessStats, AccessType, MemoryAccess } from './types';
 
-/**
- * Process — Models an active or scheduled simulated process.
- */
+export enum AccessType { READ = 'READ', WRITE = 'WRITE' }
+
+export interface MemoryAccess {
+  pid: number;
+  virtualPage: number;
+  type: AccessType;
+}
+
+export interface ProcessConfig {
+  creationTime: number;
+  lifetime: number;
+  virtualPages: number;
+  workingSetSize: number;
+  workingSetChangeInterval: number;
+}
+
+export interface ProcessStats {
+  pid: number;
+  totalAccesses: number;
+  pageFaults: number;
+  pagesAllocated: number;
+}
+
+// ---------------------------------------------------------------------------
+// Робочий набір — моделює локальність звернень
+// ---------------------------------------------------------------------------
+class WorkingSet {
+  private currentPages: number[] = [];
+  private accessesSinceChange: number = 0;
+  public readonly wsSize: number;
+  public readonly changeInterval: number;
+  private readonly locality: number;
+  private readonly totalPages: number;
+
+  constructor(
+    totalPages: number,
+    wsSize: number,
+    changeInterval: number,
+    rng: SeededRNG,
+    locality: number = 0.9
+  ) {
+    this.totalPages = totalPages;
+    this.wsSize = Math.max(1, Math.min(wsSize, totalPages));
+    this.changeInterval = changeInterval;
+    this.locality = locality;
+    this.regenerate(rng);
+  }
+
+  regenerate(rng: SeededRNG): void {
+    const set = new Set<number>();
+    while (set.size < this.wsSize && set.size < this.totalPages) {
+      set.add(rng.nextInt(this.totalPages));
+    }
+    this.currentPages = Array.from(set);
+    this.accessesSinceChange = 0;
+  }
+
+  nextPage(rng: SeededRNG): number {
+    this.accessesSinceChange++;
+    if (this.currentPages.length > 0 && rng.chance(this.locality)) {
+      return this.currentPages[rng.nextInt(this.currentPages.length)];
+    }
+    return rng.nextInt(this.totalPages);
+  }
+
+  shouldChange(): boolean {
+    return this.accessesSinceChange >= this.changeInterval;
+  }
+
+  getCurrentPages(): readonly number[] {
+    return this.currentPages;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Процес — керує таблицею сторінок, робочим набором та статистикою
+// ---------------------------------------------------------------------------
 export class Process {
   public readonly pid: number;
   public readonly virtualPages: number;
   public readonly pageTable: PageTable;
-  public readonly workingSet: WorkingSet;
-  public readonly creationTime: number;
   public readonly lifetime: number;
-
+  public readonly creationTime: number;
   public accessesPerformed: number = 0;
   public terminated: boolean = false;
   public stats: ProcessStats;
 
+  private readonly workingSet: WorkingSet;
   private readonly writeProbability: number;
   private readonly rng: SeededRNG;
 
@@ -31,11 +102,10 @@ export class Process {
     this.pid = pid;
     this.virtualPages = config.virtualPages;
     this.pageTable = new PageTable(config.virtualPages);
-    this.creationTime = config.creationTime;
     this.lifetime = config.lifetime;
+    this.creationTime = config.creationTime;
     this.writeProbability = writeProbability;
     this.rng = rng;
-
     this.workingSet = new WorkingSet(
       config.virtualPages,
       config.workingSetSize,
@@ -43,32 +113,18 @@ export class Process {
       rng,
       locality
     );
-
-    this.stats = {
-      pid,
-      totalAccesses: 0,
-      pageFaults: 0,
-      pagesAllocated: 0,
-    };
+    this.stats = { pid, totalAccesses: 0, pageFaults: 0, pagesAllocated: 0 };
   }
 
-  /**
-   * Generates the next memory access (virtual page and READ/WRITE).
-   */
   generateAccess(): MemoryAccess {
-    const virtualPage = this.workingSet.getNextPage(this.rng);
-    const type = this.rng.chance(this.writeProbability)
-      ? AccessType.WRITE
-      : AccessType.READ;
+    const virtualPage = this.workingSet.nextPage(this.rng);
+    const type = this.rng.chance(this.writeProbability) ? AccessType.WRITE : AccessType.READ;
     return { pid: this.pid, virtualPage, type };
   }
 
-  /**
-   * Checks and performs working set shift if required.
-   */
   checkWorkingSetChange(): boolean {
     if (this.workingSet.shouldChange()) {
-      this.workingSet.generateNewSet(this.rng);
+      this.workingSet.regenerate(this.rng);
       return true;
     }
     return false;
@@ -85,5 +141,9 @@ export class Process {
 
   recordPageFault(): void {
     this.stats.pageFaults++;
+  }
+
+  getWorkingSetPages(): readonly number[] {
+    return this.workingSet.getCurrentPages();
   }
 }
