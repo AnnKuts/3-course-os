@@ -5,7 +5,7 @@ const cfg: SimulationConfig = {
   numPhysicalFrames: 6,
   maxConcurrentProcesses: 2,
   processes: [
-    { creationTime: 0,  lifetime: 30, virtualPages: 10, workingSetSize: 4, workingSetChangeInterval: 15 },
+    { creationTime: 0, lifetime: 30, virtualPages: 10, workingSetSize: 4, workingSetChangeInterval: 15 },
     { creationTime: 10, lifetime: 30, virtualPages: 10, workingSetSize: 4, workingSetChangeInterval: 15 },
   ],
   timeQuantum: 10,
@@ -18,7 +18,7 @@ const cfg: SimulationConfig = {
 };
 
 console.log(`${'='.repeat(70)}`);
-console.log(`OS Lab 3 — Verbose Demo: Random vs WSClock`);
+console.log(`OS Lab 3 Demo`);
 console.log(`  Frames: ${cfg.numPhysicalFrames}  |  Processes: 2 (10 virt. pages each)`);
 console.log(`  WS size: 4  |  TAU: ${cfg.tau}  |  Quantum: ${cfg.timeQuantum}  |  Accesses: ${cfg.totalAccesses}`);
 console.log(`${'='.repeat(70)}\n`);

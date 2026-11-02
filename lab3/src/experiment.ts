@@ -6,7 +6,7 @@ export function runExperiments(): void {
   const WS_SIZES = [4, 8, 12, 16, 20, 24];
 
   console.log(`${'='.repeat(70)}`);
-  console.log(`OS Lab 3 — Experiment: Effect of Working Set Size on Page Faults`);
+  console.log(`OS Lab 3 Experiment`);
   console.log(`Frames=${FRAMES}, Seed=42, Accesses=1500, Processes=3, TAU=180`);
   console.log(`${'='.repeat(70)}\n`);
 

@@ -23,7 +23,7 @@ export function getDefaultConfig(): SimulationConfig {
 if (require.main === module) {
   const cfg = getDefaultConfig();
   console.log(`${'='.repeat(70)}`);
-  console.log(`OS Lab 3: Page Replacement Algorithms — Variant 3: Random vs WSClock`);
+  console.log(`OS Lab 3 Algorithms`);
   console.log(`${'='.repeat(70)}\n`);
   console.log(`Configuration:`);
   console.log(`  Physical frames:        ${cfg.numPhysicalFrames}`);

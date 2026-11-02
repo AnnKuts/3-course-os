@@ -1,0 +1,16 @@
+{
+  "name": "os-lab4",
+  "version": "1.0.0",
+  "description": "Лабораторна робота №4",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "demo": "tsx src/demo.ts",
+    "test": "node --import tsx --test tests/filesystem.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
