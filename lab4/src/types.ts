@@ -23,6 +23,7 @@ export type FsErrorCode =
   | 'ENOENT'
   | 'EEXIST'
   | 'EBADF'
+  | 'EBUSY'
   | 'EMFILE'
   | 'ENFILE'
   | 'ENOSPC'

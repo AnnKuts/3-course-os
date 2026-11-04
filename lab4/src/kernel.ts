@@ -24,6 +24,9 @@ export class Kernel {
   }
 
   mount(): void {
+    if (this.openFileCount > 0) {
+      throw new FsError('EBUSY', 'не можна монтувати диск за наявності відкритих файлів');
+    }
     this.fs.mount();
     this.fs.reclaimOrphans();
   }

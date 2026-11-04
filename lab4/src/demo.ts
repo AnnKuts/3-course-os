@@ -74,6 +74,9 @@ function main(): void {
   const read = (fd: number, size: number, full = false) =>
     cmd(`read ${fd} ${size}`, () => formatRead(k.read(fd, size), full));
 
+  console.log('OS Lab 4 | Block File System');
+  console.log('Block size: 256 B | Disk: 1 MiB | Inodes: 100');
+
   section('FILE OPERATIONS');
   cmd('mkfs 100', () => { k.mkfs(100); });
   cmd('create file.txt', () => { k.create('file.txt'); });

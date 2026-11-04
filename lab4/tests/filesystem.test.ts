@@ -343,6 +343,13 @@ describe('Файлова система', () => {
     assert.equal(kernel.stat('b').size, 0);
   });
 
+  it('19c. mount за наявності відкритих fd викидає EBUSY', () => {
+    const { kernel } = setup();
+    kernel.create('a');
+    kernel.open('a');
+    throwsCode(() => kernel.mount(), 'EBUSY');
+  });
+
   it('20a. некоректні імена та аргументи', () => {
     const { kernel } = setup();
     for (const bad of ['', 'a/b', 'with space', 'x'.repeat(25), 'ключ']) {
